@@ -23,19 +23,20 @@ const validatePhone = (phone) => {
 exports.register = async (req, res, next) => {
     try {
         const { name, email, phone, password, role } = req.body;
+        console.log(req.body, 'req.body');
 
         // --- 1. Validation Logic (Moved from Model) ---
         if (!name || !email || !phone || !password) {
+            console.log("Please provide name, email, phone, and password")
             return res.status(400).json({ success: false, error: 'Please provide name, email, phone, and password.' });
         }
         if (!validateEmail(email)) {
+            console.log("Please add a valid email address.")
             return res.status(400).json({ success: false, error: 'Please add a valid email address.' });
         }
         if (!validatePhone(phone)) {
+            console.log(phone, "phone not !!")
             return res.status(400).json({ success: false, error: 'Please provide a valid phone number (min 10 digits).' });
-        }
-        if (password.length < 6) {
-            return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
         }
 
         // --- 2. Hashing Logic (Moved from Model Middleware) ---
@@ -45,7 +46,7 @@ exports.register = async (req, res, next) => {
         // Check if user already exists
         let user = await User.findOne({ email });
         if (user) {
-            console.error(`[ERROR] Registration failed: Duplicate email: ${email}`);
+            console.log(`[ERROR] Registration failed: Duplicate email: ${email}`);
             return res.status(400).json({ success: false, error: 'Email already registered.' });
         }
 
@@ -73,7 +74,7 @@ exports.register = async (req, res, next) => {
         });
         console.log(`[LOG] New user registered: ${user.email} (${user.role})`);
     } catch (err) {
-        console.error(`[ERROR] Registration failed: ${err.message}`);
+        console.log(`[ERROR] Registration failed: ${err.message}`);
         res.status(500).json({ success: false, error: 'Server error during registration.' });
     }
 };
