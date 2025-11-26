@@ -38,7 +38,6 @@ exports.createPatient = async (req, res, next) => {
     }
 };
 
-
 exports.getPatients = async (req, res, next) => {
     try {
         // Basic Query Object for filtering
@@ -153,185 +152,180 @@ exports.deletePatient = async (req, res, next) => {
     }
 };
 
-exports.addTreatment = async (req, res, next) => {
+exports.addTreatment = async (req, res) => {
     try {
         const { patientId, homoeopathy, diet, notes } = req.body;
 
         if (!patientId) {
-            return res.status(400).json({
-                success: false,
-                error: "Patient ID is required in request body."
-            });
+            return res.status(400).json({ success: false, error: "patientId is required" });
         }
 
-        if (!homoeopathy && !diet) {
-            return res.status(400).json({
-                success: false,
-                error: "Please provide at least one treatment (homoeopathy or diet)."
-            });
-        }
-
-        const newTreatment = {
-            homoeopathy: homoeopathy || [],
-            diet: diet || [],
-            notes: notes || ""
-        };
-
-        const patient = await Patient.findByIdAndUpdate(
-            patientId,
-            { $push: { treatments: newTreatment } },
-            { new: true, runValidators: true }
-        );
-
+        const patient = await Patient.findById(patientId);
         if (!patient) {
-            return res.status(404).json({
-                success: false,
-                error: `Patient with ID ${patientId} not found.`
-            });
+            return res.status(404).json({ success: false, error: "Patient not found" });
         }
 
-        console.log(`[LOG] New treatment added to patient ID: ${patientId}`);
+        // Ensure treatment exists
+        if (!patient.treatment) {
+            patient.treatment = { homoeopathy: [], diet: [], notes: "" };
+        }
 
-        res.status(200).json({
+        // Add homoeopathy items
+        if (homoeopathy) {
+            const items = Array.isArray(homoeopathy) ? homoeopathy : [homoeopathy];
+            patient.treatment.homoeopathy.push(...items);
+        }
+
+        // Add diet items
+        if (diet) {
+            const items = Array.isArray(diet) ? diet : [diet];
+            patient.treatment.diet.push(...items);
+        }
+
+        // Update notes
+        if (notes !== undefined) {
+            patient.treatment.notes = notes;
+        }
+
+        await patient.save();
+
+        return res.status(200).json({
             success: true,
-            message: "Treatment added successfully.",
-            data: patient.treatments[patient.treatments.length - 1]
+            message: "Treatment updated successfully",
+            data: patient.treatment
         });
 
     } catch (err) {
-        console.error(`[ERROR] Failed to add treatment: ${err.message}`);
-        res.status(500).json({
-            success: false,
-            error: "Server error adding treatment.",
-            details: err.message
-        });
+        console.error("[ERROR] addTreatment:", err);
+        return res.status(500).json({ success: false, error: err.message });
     }
 };
 
-exports.editTreatment = async (req, res, next) => {
+exports.editTreatment = async (req, res) => {
     try {
-        const { homoeopathy, diet, notes, patientId, treatmentId } = req.body;
+        const { patientId, itemId, homoeopathy, diet, notes } = req.body;
 
-        console.log("========== EDIT TREATMENT DEBUG LOGS ==========");
-        console.log("Incoming patientId:", patientId);
-        console.log("Incoming treatmentId:", treatmentId);
-        console.log("Incoming homoeopathy:", homoeopathy);
-        console.log("Incoming diet:", diet);
-        console.log("Incoming notes:", notes);
-
-        if (!patientId || !treatmentId) {
-            console.log("❌ Missing IDs");
-            return res.status(400).json({
-                success: false,
-                error: "patientId and treatmentId are required."
-            });
+        if (!patientId) {
+            return res.status(400).json({ success: false, error: "patientId is required" });
         }
 
-        const updateFields = {};
-
-        if (homoeopathy !== undefined)
-            updateFields['treatments.$[element].homoeopathy'] = homoeopathy;
-
-        if (diet !== undefined)
-            updateFields['treatments.$[element].diet'] = diet;
-
-        if (notes !== undefined)
-            updateFields['treatments.$[element].notes'] = notes;
-
-        console.log("\nUpdate fields to apply:", updateFields);
-
-        console.log("\nRunning MongoDB update with arrayFilters:", {
-            'element._id': treatmentId
-        });
-
-        const patient = await Patient.findOneAndUpdate(
-            { _id: patientId },
-            { $set: updateFields },
-            {
-                new: true,
-                runValidators: true,
-                arrayFilters: [{ 'element._id': treatmentId }],
-                select: "treatments"
-            }
-        );
-
-        console.log("\nMongoDB update result:", patient);
-
+        const patient = await Patient.findById(patientId);
         if (!patient) {
-            console.log("❌ Patient not found");
-            return res.status(404).json({
-                success: false,
-                error: "Patient not found"
-            });
+            return res.status(404).json({ success: false, error: "Patient not found" });
         }
 
-        const updatedTreatment = patient.treatments.find(
-            t => t._id.toString() === treatmentId
-        );
-
-        if (!updatedTreatment) {
-            console.log("❌ Treatment ID existed earlier but update did not trigger");
-            console.log("Possible reason: arrayFilters not matching anything");
+        const treatment = patient.treatment;
+        if (!treatment) {
+            return res.status(404).json({ success: false, error: "This patient has no treatment yet" });
         }
 
-        // Log homoeopathy for the matched treatment
-        const treatment = patient.treatments.find(t => t._id.toString() === treatmentId);
-
-        if (treatment) {
-            console.log("\n📌 HOMOEOPATHY LOG (for treatmentId):", treatmentId);
-            console.log(JSON.stringify(treatment.homoeopathy, null, 2));
-        } else {
-            console.log("\n❌ Treatment not found inside patient after update.");
+        // ---------------------------------
+        // Update notes
+        // ---------------------------------
+        if (notes !== undefined) {
+            treatment.notes = notes;
         }
 
-        console.log("========== END LOGS ==========\n");
+        // ---------------------------------
+        // Update/Add homoeopathy item
+        // ---------------------------------
+        if (homoeopathy && Array.isArray(homoeopathy) && homoeopathy.length > 0) {
+            const data = homoeopathy[0];
 
-        res.status(200).json({
-            success: true,
-            message: "Treatment updated successfully.",
-            data: updatedTreatment
-        });
-
-    } catch (err) {
-        console.error(`[ERROR] Failed to edit treatment: ${err.message}`);
-        res.status(500).json({
-            success: false,
-            error: "Server error editing treatment.",
-            details: err.message
-        });
-    }
-};
-
-
-exports.deleteTreatment = async (req, res, next) => {
-    try {
-        const { patientId, treatmentId } = req.params;
-
-        // Use $pull to remove the embedded document by its ID
-        const patient = await Patient.findByIdAndUpdate(
-            patientId,
-            {
-                $pull: {
-                    treatments: { _id: treatmentId }
+            if (itemId) {
+                const existing = treatment.homoeopathy.id(itemId);
+                if (existing) {
+                    Object.assign(existing, data);
+                } else {
+                    treatment.homoeopathy.push(data);
                 }
-            },
-            { new: true, select: 'treatments' } // Return the updated document
-        );
-
-        if (!patient) {
-            return res.status(404).json({ success: false, error: `Patient with ID ${patientId} not found.` });
+            } else {
+                treatment.homoeopathy.push(data);
+            }
         }
 
-        console.log(`[LOG] Treatment ID ${treatmentId} deleted from patient ID: ${patientId}`);
-        res.status(200).json({
+        // ---------------------------------
+        // Update/Add diet item
+        // ---------------------------------
+        if (diet && Array.isArray(diet) && diet.length > 0) {
+            const data = diet[0];
+
+            if (itemId) {
+                const existing = treatment.diet.id(itemId);
+                if (existing) {
+                    Object.assign(existing, data);
+                } else {
+                    treatment.diet.push(data);
+                }
+            } else {
+                treatment.diet.push(data);
+            }
+        }
+
+        await patient.save();
+
+        return res.status(200).json({
             success: true,
-            data: {},
-            message: 'Treatment deleted successfully.'
+            message: "Item updated successfully",
+            data: treatment
         });
 
     } catch (err) {
-        console.error(`[ERROR] Failed to delete treatment: ${err.message}`);
-        res.status(500).json({ success: false, error: 'Server error deleting treatment.', details: err.message });
+        console.error("[ERROR] editTreatment:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+
+exports.deleteTreatment = async (req, res) => {
+    try {
+        const { patientId, itemId } = req.body;
+
+        if (!patientId || !itemId) {
+            return res.status(400).json({ success: false, error: "patientId and itemId are required" });
+        }
+
+        const patient = await Patient.findById(patientId);
+        if (!patient) {
+            return res.status(404).json({ success: false, error: "Patient not found" });
+        }
+
+        const treatment = patient.treatment; // NOW this is a single object
+        if (!treatment) {
+            return res.status(404).json({ success: false, error: "No treatment recorded" });
+        }
+
+        let removed = false;
+
+        // Delete from homoeopathy
+        const homeoItem = treatment.homoeopathy.id(itemId);
+        if (homeoItem) {
+            treatment.homoeopathy.pull(itemId);
+            removed = true;
+        }
+
+        // Delete from diet
+        const dietItem = treatment.diet.id(itemId);
+        if (dietItem) {
+            treatment.diet.pull(itemId);
+            removed = true;
+        }
+
+        if (!removed) {
+            return res.status(404).json({ success: false, error: "Item not found" });
+        }
+
+        await patient.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Item deleted successfully",
+            data: treatment
+        });
+
+    } catch (err) {
+        console.error("[ERROR] deleteTreatment:", err);
+        return res.status(500).json({ success: false, error: err.message });
     }
 };
 

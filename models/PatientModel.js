@@ -60,16 +60,15 @@ const DietSchema = new mongoose.Schema({
 });
 
 // --- 4. Nested Schema for a Single Treatment Record ---
-// A patient can have multiple treatment records (one or more homoeopathy/diet per visit)
 const TreatmentSchema = new mongoose.Schema({
-    homoeopathy: [HomoeopathySchema], // Array of homeopathic remedies (B1: ability to add multiple remedies)
-    diet: [DietSchema],              // Array of diet consultations (can have multiple entries if needed)
-    notes: String, // General notes for this treatment entry
+    homoeopathy: [HomoeopathySchema],
+    diet: [DietSchema],
+    notes: String,
     addedAt: {
         type: Date,
         default: Date.now
     }
-}, { _id: true });
+}, { _id: false });   // <- IMPORTANT, no need for _id at treatment level
 
 
 // --- 5. Nested Schema for Payments ---
@@ -152,7 +151,14 @@ const PatientSchema = new mongoose.Schema({
 
     // --- Embedded History Arrays ---
     investigationFiles: [InvestigationFileSchema], // A. Patient Data Management (Reports/Images)
-    treatments: [TreatmentSchema],               // B. Treatment Management (Homoeopathy + Diet)
+    treatment: {
+        type: TreatmentSchema,
+        default: () => ({
+            homoeopathy: [],
+            diet: [],
+            notes: ""
+        })
+    },             // B. Treatment Management (Homoeopathy + Diet)
     payments: [PaymentSchema],                   // C. Payment Module
     followUps: [FollowUpSchema],                 // 3. Appointment & Scheduling System
 
