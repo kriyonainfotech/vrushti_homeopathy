@@ -107,11 +107,6 @@ const FollowUpSchema = new mongoose.Schema({
         enum: ['Upcoming', 'Completed', 'Pending'],
         default: 'Upcoming' // Default status when created
     },
-    createdBy: {
-        type: mongoose.Schema.ObjectId,
-        ref: 'User',
-        required: true
-    },
     createdAt: {
         type: Date,
         default: Date.now
