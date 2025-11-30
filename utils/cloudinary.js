@@ -8,19 +8,52 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+/**
+ * Uploads a buffer (from multer memory storage) to Cloudinary.
+ * Applies maximum possible compression and optimization.
+ * @param {Buffer} buffer - The file buffer from multer.
+ * @param {string} folder - The destination folder in Cloudinary (e.g., 'clinic_app/reports').
+ * @param {string} resourceType - 'auto' or 'raw' for PDFs, 'image' for images.
+ * @param {string} mimeType - The file's MIME type to determine specific transformations.
+ * @returns {Promise<object>} The Cloudinary result object.
+ */
+exports.uploadStream = (buffer, folder, resourceType, mimeType) => {
+    
+    // --- Default Transformation (for Images) ---
+    let transformationOptions = {
+        // Automatically selects the best format (e.g., WebP, AVIF)
+        fetch_format: 'auto', 
+        // Automatically selects the optimal quality level
+        quality: 'auto',       
+        // Constrain width to 1024px for mobile viewing efficiency
+        width: 1024,
+        crop: "limit"
+    };
 
-exports.uploadStream = (buffer, folder, resourceType) => {
+    // --- Specific Compression Logic for PDFs (Raw files) ---
+    if (mimeType === 'application/pdf' || resourceType === 'raw') {
+        // For PDF documents, force conversion to JPG and compress aggressively.
+        // This makes documents load quickly as images on the mobile app.
+        transformationOptions = {
+            // Force output format to JPG
+            fetch_format: 'jpg', 
+            // Use low quality for better compression of text/report images
+            quality: 'auto:low', 
+            // Constrain width for mobile viewing
+            width: 1024, 
+            crop: "limit",
+            // Cloudinary feature: treats the PDF as a document
+            resource_type: 'image' 
+        };
+    }
+
+
     return new Promise((resolve, reject) => {
         let stream = cloudinary.uploader.upload_stream(
-            {
+            { 
                 folder: folder,
                 resource_type: resourceType,
-                // --- PDF Compression & Optimization (for documents/reports) ---
-                // For PDF, force JPG format and compress to reduce size.
-                // We use auto quality and a max width for reports to ensure fast loading on mobile.
-                transformation: [
-                    { quality: "auto:low", width: 1024, crop: "limit", format: "jpg" }
-                ]
+                ...transformationOptions, // Apply the chosen transformations
             },
             (error, result) => {
                 if (result) {
@@ -32,6 +65,6 @@ exports.uploadStream = (buffer, folder, resourceType) => {
         );
 
         // Convert buffer to readable stream and pipe it to cloudinary
-        streamifier.createReadStream(buffer).pipe(stream);
+       streamifier.createReadStream(buffer).pipe(stream);
     });
-};  
+};

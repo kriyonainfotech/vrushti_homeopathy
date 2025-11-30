@@ -286,3 +286,96 @@ exports.resetPassword = async (req, res, next) => {
         res.status(500).json({ success: false, error: 'Server error during password reset.' });
     }
 };
+
+
+// @desc    Update User Details (Name, Email, Phone, Password)
+// @route   PUT /api/v1/auth/updateprofile
+// @access  Protected
+exports.updateUserDetails = async (req, res, next) => {
+    try {
+        const { userId,name, email, phone, password } = req.body;
+
+        const fieldsToUpdate = {};
+
+        // 1. Handle Name Update
+        if (name) {
+            fieldsToUpdate.name = name;
+        }
+
+        // 2. Handle Email Update
+        if (email) {
+            if (!validateEmail(email)) {
+                return res.status(400).json({ success: false, error: 'Please provide a valid email address.' });
+            }
+            // Check if new email is already in use by another user
+            const existingUser = await User.findOne({ email });
+           if (existingUser && existingUser._id.toString() !== String(userId)){
+                console.error(`[ERROR] Profile update failed: Email ${email} already in use.`);
+                return res.status(400).json({ success: false, error: 'This email is already registered to another user.' });
+            }
+            fieldsToUpdate.email = email;
+        }
+
+        // 3. Handle Phone Update
+        if (phone) {
+            if (!validatePhone(phone)) {
+                return res.status(400).json({ success: false, error: 'Please provide a valid phone number (min 10 digits).' });
+            }
+            fieldsToUpdate.phone = phone;
+        }
+
+        // 4. Handle Password Update (requires hashing)
+        if (password) {
+            if (password.length < 6) {
+                return res.status(400).json({ success: false, error: 'New password must be at least 6 characters.' });
+            }
+            // Hash the new password
+            const salt = await bcrypt.genSalt(10);
+            fieldsToUpdate.password = await bcrypt.hash(password, salt);
+        }
+
+        // Prevent updating the role field via this route
+        if (req.body.role) {
+             console.warn(`[WARNING] Attempt to update role via general profile route by user ${req.user.email} blocked.`);
+             delete fieldsToUpdate.role;
+        }
+
+
+        if (Object.keys(fieldsToUpdate).length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid fields provided for update (name, email, phone, or password).' });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            userId, 
+            { $set: fieldsToUpdate }, 
+            { new: true, runValidators: true } // Return the updated doc and run validators
+        ).select('-password -resetPasswordToken -resetPasswordExpire'); // Exclude sensitive/temp fields
+
+        if (!user) {
+             // This should theoretically not happen if protect middleware works
+             return res.status(404).json({ success: false, error: 'User not found.' });
+        }
+
+        console.log(`[LOG] User profile updated for ID: ${userId}.`);
+        res.status(200).json({
+            success: true,
+            data: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role
+            },
+            message: 'Profile updated successfully.'
+        });
+
+    } catch (err) {
+        // Handle MongoDB duplicate key error for email (E11000)
+        if (err.code === 11000) {
+            console.error(`[ERROR] Profile update failed: Duplicate key error (Email).`);
+            return res.status(400).json({ success: false, error: 'This email is already registered to another user.' });
+        }
+        console.error(`[ERROR] Update profile failed: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Server error during profile update.' });
+    }
+};

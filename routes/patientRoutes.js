@@ -1,24 +1,26 @@
 const express = require('express');
+const router = express.Router();
+
 const {
     createPatient,
     getPatients,
     addTreatment,
-    uploadFile,
     editTreatment,
     deleteTreatment, getPatient,
     updatePatient,
-    deletePatient
+    deletePatient,
+    getAllPatientPayments
 } = require('../controllers/patientController');
 const multer = require('multer');
 const { getAppointmentsList, updateFollowUpStatus, deleteFollowUp, getPatientFollowUps, addFollowUp } = require('../controllers/appointmentsController');
+const { getPatientPayments, addPayment, deletePayment } = require('../controllers/paymentController');
 
-const router = express.Router();
+const { uploadFile, deleteFile } = require('../controllers/fileController');
 
-// --- Multer Setup ---
-// Use memory storage for Multer, which is required for stream uploads to Cloudinary
+
+// --- Multer Setup: Use memory storage for stream upload to Cloudinary ---
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
-
 
 // All routes below are protected (require 'User-ID' header)
 // router.use(protect); // Applies 'protect' middleware to all routes in this router
@@ -42,9 +44,11 @@ router.put('/treatments/edit', editTreatment);
 
 router.delete('/treatments/:treatmentId', deleteTreatment);
 
-router.post('/upload', upload.single('file'), uploadFile);
+// POST /files/upload - Handles file upload using multer middleware
+router.post('/files/upload', upload.single('file'), uploadFile); 
 
-// --- Follow-up Routes (IDs in body) ---
+// DELETE /files/:patientId/delete/:fileId - Delete file from Cloudinary and DB
+router.delete('/files/delete', deleteFile);
 
 // GET /followup/list - Get all follow-ups from all patients
 router.get('/followup/list', getAppointmentsList);
@@ -61,5 +65,16 @@ router.delete('/followup/delete', deleteFollowUp);
 // GET /followup/patient - Get all follow-ups for a single patient
 router.post('/followup/patientId', getPatientFollowUps); // now uses body: { patientId }
 
+// ==========================================================
+// PAYMENT MODULE (C. Payment Module) - NEW ROUTES
+// ==========================================================
+// GET /patients/:patientId/payments - List all payments for a patient
+router.post('/payments/bypatientId', getPatientPayments); 
+// POST /patients/:patientId/payments - Add a new payment record
+router.post('/payments/add', addPayment); 
+// DELETE /patients/:patientId/payments/:paymentId - Delete a payment record
+router.delete('/payments/delete', deletePayment);
+
+router.get('/payments/all', getAllPatientPayments);
 
 module.exports = router;
