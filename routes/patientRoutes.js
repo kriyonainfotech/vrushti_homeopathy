@@ -15,7 +15,7 @@ const multer = require('multer');
 const { getAppointmentsList, updateFollowUpStatus, deleteFollowUp, getPatientFollowUps, addFollowUp } = require('../controllers/appointmentsController');
 const { getPatientPayments, addPayment, deletePayment } = require('../controllers/paymentController');
 
-const { uploadFile, deleteFile } = require('../controllers/fileController');
+const { uploadFile, deleteFile } = require('../controllers/FileController');
 
 
 // --- Multer Setup: Use memory storage for stream upload to Cloudinary ---
